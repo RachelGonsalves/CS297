@@ -25,9 +25,7 @@ def createDict():
     global wordList
     global tagIndices
     global WHITE_LIST
-    taggedWords = brown.tagged_words()
-    #print(taggedWords)
-    #http://www.scs.leeds.ac.uk/amalgam/tagsets/brown.html
+    taggedWords = brown.tagged_words()    #http://www.scs.leeds.ac.uk/amalgam/tagsets/brown.html
     for id, tuple in enumerate(taggedWords):
         word = tuple[0]
         tag = tuple[1]
@@ -61,16 +59,12 @@ def binary2Long(f, n):
         yield val
 
 createDict()
-# print(tagIndices)
-# print(len(wordList))
 
-# for k,v in tagIndices.items():
-#     print("%s:%d" %(k, len(v)))
+dict_size = min([len(v) for k,v in tagIndices.items()])
 
-dict_size = max([len(v) for k,v in tagIndices.items()])
-# print(dict_size)
-n = int(math.floor(math.log(dict_size, 2)))  # n is the number of bits to be replaced/block size
-# print n
+n = int(math.floor(math.log(dict_size, 2))) # n is the number of bits to be replaced/block size
+print(n)
+
 pat = '/home/rachel1105g/nltk_data/corpora/brown/'
 
 
@@ -81,31 +75,30 @@ stateIndex = 0
 STATE =[STATES1,STATES2,STATES3]
 num = randint(0, 2)
 STATES = STATE[num]
-# dict_states = {'STATES1':['JJ', 'NN', 'VB', 'period'], 'STATES2' = ['NN', 'VB', 'RB', 'period'], 'STATES3' = ['NN', 'VB', 'IN', 'NN','period'] }
+
 SPACE = " "
 textStr = ""
-# fileCount = 10
+fileCount =  4
 for fil in os.listdir(pat):
     if (fil.endswith(".enc")) and os.path.exists(pat + fil):
         filepath = os.path.join(pat, fil)
         print filepath
-        # fileCount -= 1
-        # if fileCount == 2:
-        #     break
+        fileCount -= 1
+        if fileCount == 2:
+            break
         f = open(os.path.abspath(filepath), "rb")
         for longval in binary2Long(f, n):
             if stateIndex == len(STATES):
                 stateIndex = 0
                 num = randint(0, 2)
                 STATES = STATE[num]
-                #print(len(STATES))
 
             state = STATES[stateIndex]
             if state in tagIndices:
                 index = tagIndices[state]
-                #print(index)
-                tagLen = len(index)
-                idx = longval % tagLen
+
+                # tagLen = len(index)
+                idx = longval
                 wrdIdx = index[idx]
                 wrd = wordList[wrdIdx]
                 textStr += wrd
@@ -121,8 +114,29 @@ for fil in os.listdir(pat):
             file.write(textStr)
             textStr = ""
 
-f.close()
 print(textStr)
+f.close()
+print("encoding over")
 
+textSt = ""
+for fil in os.listdir(pat):
+    if (fil.endswith(".enc.txt")) and os.path.exists(pat + fil):
+        filepath = os.path.join(pat, fil)
+        print filepath
+        f = open(os.path.abspath(filepath), "rb")
+        for line in f:
+            for word in line.split():
+                wrd = word.replace(".","")
+                if wrd in wordList:
+                    id = wordList.index(wrd)
+                    # id = id%n
+                    text = '{0:015b}'.format(id)
+                    textSt += text
+
+        decoded_file = str(filepath) + ".dec"
+        with io.FileIO(decoded_file, "wb") as file:
+                file.write(textSt)
+                textSt = ""
+f.close()
 
 
