@@ -66,7 +66,7 @@ n = int(math.floor(math.log(dict_size, 2))) # n is the number of bits to be repl
 print(n)
 
 pat = '/home/rachel1105g/nltk_data/corpora/brown/'
-
+pat = 'test_data/'
 
 STATES1 = ['JJ', 'NN', 'VB', 'period'] #adjective noun verb period
 STATES2 = ['NN', 'VB', 'RB', 'period']# noun verb adverb period
@@ -118,25 +118,65 @@ print(textStr)
 f.close()
 print("encoding over")
 
-textSt = ""
+import binascii
+# binTxt = ""
+# for fil in os.listdir(pat):
+#     if (fil.endswith(".enc.txt")) and os.path.exists(pat + fil):
+#         filepath = os.path.join(pat, fil)
+#         print filepath
+#         with open(os.path.abspath(filepath), "ro") as f:
+#             for line in f:
+#                 for word in line.split():
+#                     wrd = word.replace(".","")
+#                     if wrd in wordList:
+#                         id = wordList.index(wrd)
+#                         # id = id%n
+#                         textBinary = '{0:015b}'.format(id)
+#                         valueBinary = binascii.a2b_base64(textBinary)
+#                         binTxt += valueBinary
+#
+#         decoded_file = str(filepath) + ".dec"
+#         print(decoded_file)
+#         with open(decoded_file, "wb") as file:
+#                 file.write(binTxt)
+#                 binTxt = ""
+
+def read_bit_str(f):
+    for line in f:
+        for word in line.split():
+            wrd = word.replace(".","")
+            if wrd in wordList:
+                id = wordList.index(wrd)
+                # id = id%n
+                textBinary = '{0:015b}'.format(id)
+                for c in textBinary:
+                    yield c
+
+def read_octet_str(f):
+    binTxt = ""
+    idx = 0
+    for c in read_bit_str(f):
+        binTxt += c
+        idx += 1
+        if idx == 8:
+            yield binTxt
+            idx = 0
+            binTxt = ""
+    if binTxt:
+        yield binTxt
+
 for fil in os.listdir(pat):
     if (fil.endswith(".enc.txt")) and os.path.exists(pat + fil):
         filepath = os.path.join(pat, fil)
         print filepath
-        f = open(os.path.abspath(filepath), "rb")
-        for line in f:
-            for word in line.split():
-                wrd = word.replace(".","")
-                if wrd in wordList:
-                    id = wordList.index(wrd)
-                    # id = id%n
-                    text = '{0:015b}'.format(id)
-                    textSt += text
-
-        decoded_file = str(filepath) + ".dec"
-        with io.FileIO(decoded_file, "wb") as file:
-                file.write(textSt)
-                textSt = ""
-f.close()
-
+        with open(os.path.abspath(filepath), "ro") as inFile: # input file
+            decoded_file = str(filepath) + ".dec"
+            print(decoded_file)
+            with open(decoded_file, "wb") as outFile: # output file
+                # read 8 bits from input file
+                for octet in read_octet_str(inFile):
+                    if len(octet) != 8:
+                        octet = '0' * (8 - len(octet)) + octet
+                    byteBase64 = binascii.a2b_base64(octet)
+                    outFile.write(byteBase64)
 

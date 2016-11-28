@@ -53,6 +53,7 @@ password = 'Rachel'
 keyin = hashlib.sha256(password).digest()
 
 pat = '/home/rachel1105g/nltk_data/corpora/brown/'
+pat = 'test_data/'
 
 for fil in os.listdir(pat):
     print(fil)
