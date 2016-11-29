@@ -28,7 +28,7 @@ def encrypt_file(key, in_filename, out_filename=None, chunksize=64 * 1024):
             chunksize must be divisible by 16.
     """
     if not out_filename:
-        out_filename = in_filename + '.enc'
+        out_filename = in_filename + '.encr'
 
     iv = ''.join(chr(random.randint(0, 0xFF)) for i in range(16))
     encryptor = AES.new(key, AES.MODE_CBC, iv)
@@ -54,8 +54,11 @@ keyin = hashlib.sha256(password).digest()
 
 pat = '/home/rachel1105g/nltk_data/corpora/brown/'
 pat = 'test_data/'
+pat = 'small_data/'
 
 for fil in os.listdir(pat):
     print(fil)
     if (os.path.exists(pat+fil)):
         encrypt_file(keyin, pat+fil)
+
+

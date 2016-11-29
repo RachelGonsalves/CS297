@@ -65,8 +65,9 @@ dict_size = min([len(v) for k,v in tagIndices.items()])
 n = int(math.floor(math.log(dict_size, 2))) # n is the number of bits to be replaced/block size
 print(n)
 
-pat = '/home/rachel1105g/nltk_data/corpora/brown/'
+#pat = '/home/rachel1105g/nltk_data/corpora/brown/'
 pat = 'test_data/'
+pat = 'small_data/'
 
 STATES1 = ['JJ', 'NN', 'VB', 'period'] #adjective noun verb period
 STATES2 = ['NN', 'VB', 'RB', 'period']# noun verb adverb period
@@ -80,7 +81,7 @@ SPACE = " "
 textStr = ""
 fileCount =  4
 for fil in os.listdir(pat):
-    if (fil.endswith(".enc")) and os.path.exists(pat + fil):
+    if (fil.endswith('.encr')) and os.path.exists(pat + fil):
         filepath = os.path.join(pat, fil)
         print filepath
         fileCount -= 1
@@ -109,7 +110,7 @@ for fil in os.listdir(pat):
                 textStr += SPACE
             stateIndex += 1
 
-        encoded_file = str(filepath) + ".txt"
+        encoded_file = str(filepath) + ".enc"
         with io.FileIO(encoded_file, "w") as file:
             file.write(textStr)
             textStr = ""
@@ -147,8 +148,16 @@ def read_bit_str(f):
             wrd = word.replace(".","")
             if wrd in wordList:
                 id = wordList.index(wrd)
-                # id = id%n
-                textBinary = '{0:015b}'.format(id)
+                for i in WHITE_LIST:
+                    if id in tagIndices[i]:
+                        print(id)
+                        val = tagIndices[i].index(id) # can optimize search by finding word tag
+                        print(val)
+                        break
+                # for each taggedIndex, find id where index[longval] = id
+                # meaning: longval = tagindex.index(id)
+                textBinary = '{0:015b}'.format(val)
+                print(textBinary)
                 for c in textBinary:
                     yield c
 
@@ -166,7 +175,7 @@ def read_octet_str(f):
         yield binTxt
 
 for fil in os.listdir(pat):
-    if (fil.endswith(".enc.txt")) and os.path.exists(pat + fil):
+    if (fil.endswith('.encr.enc')) and os.path.exists(pat + fil):
         filepath = os.path.join(pat, fil)
         print filepath
         with open(os.path.abspath(filepath), "ro") as inFile: # input file
@@ -177,6 +186,6 @@ for fil in os.listdir(pat):
                 for octet in read_octet_str(inFile):
                     if len(octet) != 8:
                         octet = '0' * (8 - len(octet)) + octet
-                    byteBase64 = binascii.a2b_base64(octet)
+                    byteBase64 = binascii.a2b_uu(octet)
                     outFile.write(byteBase64)
 
