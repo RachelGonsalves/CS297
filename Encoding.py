@@ -69,102 +69,97 @@ print(n)
 pat = 'test_data/'
 pat = 'small_data/'
 
-STATES1 = ['JJ', 'NN', 'VB', 'period'] #adjective noun verb period
-STATES2 = ['NN', 'VB', 'RB', 'period']# noun verb adverb period
-STATES3 = ['NN', 'VB', 'IN', 'NN','period']# noun verb preposition noun period
-stateIndex = 0
-STATE =[STATES1,STATES2,STATES3]
-num = randint(0, 2)
-STATES = STATE[num]
+def main_encode():
 
-SPACE = " "
-textStr = ""
-fileCount =  4
-for fil in os.listdir(pat):
-    if (fil.endswith('.encr')) and os.path.exists(pat + fil):
-        filepath = os.path.join(pat, fil)
-        print filepath
-        fileCount -= 1
-        if fileCount == 2:
-            break
-        f = open(os.path.abspath(filepath), "rb")
-        for longval in binary2Long(f, n):
-            if stateIndex == len(STATES):
-                stateIndex = 0
-                num = randint(0, 2)
-                STATES = STATE[num]
+    STATES1 = ['JJ', 'NN', 'VB', 'period'] #adjective noun verb period
+    STATES2 = ['NN', 'VB', 'RB', 'period']# noun verb adverb period
+    STATES3 = ['NN', 'VB', 'IN', 'NN','period']# noun verb preposition noun period
+    stateIndex = 0
+    STATE =[STATES1,STATES2,STATES3]
+    num = randint(0, 2)
+    STATES = STATE[num]
 
-            state = STATES[stateIndex]
-            if state in tagIndices:
-                index = tagIndices[state]
+    SPACE = " "
+    textStr = ""
+    wrdIdxStr = ""
+    fileCount =  4
+    for fil in os.listdir(pat):
+        if (fil.endswith('.encr')) and os.path.exists(pat + fil):
+            filepath = os.path.join(pat, fil)
+            print filepath
+            fileCount -= 1
+            if fileCount == 2:
+                break
+            f = open(os.path.abspath(filepath), "rb")
+            for longval in binary2Long(f, n):
+                if stateIndex == len(STATES):
+                    stateIndex = 0
+                    num = randint(0, 2)
+                    STATES = STATE[num]
 
-                # tagLen = len(index)
-                idx = longval
-                wrdIdx = index[idx]
-                wrd = wordList[wrdIdx]
-                textStr += wrd
-                textStr += SPACE
-            else:
-                textStr = textStr[:-1]
-                textStr += '.'
-                textStr += SPACE
-            stateIndex += 1
+                state = STATES[stateIndex]
+                if state in tagIndices:
+                    posindex = tagIndices[state]
 
-        encoded_file = str(filepath) + ".enc"
-        with io.FileIO(encoded_file, "w") as file:
-            file.write(textStr)
-            textStr = ""
+                    # tagLen = len(index)
+                    idx = longval
+                    wrdIdx = posindex[idx]
+                    wrd = wordList[wrdIdx]
+                    wrdIdxStr += "%s, " % str(wrdIdx)
+                    textStr += wrd
+                    textStr += SPACE
+                else:
+                    textStr = textStr[:-1]
+                    textStr += '.'
+                    textStr += SPACE
+                stateIndex += 1
 
-print(textStr)
-f.close()
-print("encoding over")
+            encoded_file = str(filepath) + ".enc"
+            encoded_idx_file = str(filepath) + ".idx.enc"
+            with io.FileIO(encoded_file, "w") as file:
+                file.write(textStr)
+                textStr = ""
+            with io.FileIO(encoded_idx_file, "w") as file:
+                file.write(wrdIdxStr)
+                wrdIdxStr = ""
 
+    print(textStr)
+    f.close()
+    print("encoding over")
+
+'''
+    DECODING:
+'''
 import binascii
-# binTxt = ""
-# for fil in os.listdir(pat):
-#     if (fil.endswith(".enc.txt")) and os.path.exists(pat + fil):
-#         filepath = os.path.join(pat, fil)
-#         print filepath
-#         with open(os.path.abspath(filepath), "ro") as f:
-#             for line in f:
-#                 for word in line.split():
-#                     wrd = word.replace(".","")
-#                     if wrd in wordList:
-#                         id = wordList.index(wrd)
-#                         # id = id%n
-#                         textBinary = '{0:015b}'.format(id)
-#                         valueBinary = binascii.a2b_base64(textBinary)
-#                         binTxt += valueBinary
-#
-#         decoded_file = str(filepath) + ".dec"
-#         print(decoded_file)
-#         with open(decoded_file, "wb") as file:
-#                 file.write(binTxt)
-#                 binTxt = ""
 
-def read_bit_str(f):
+def read_bit_str(f, debugStreamer = None):
     for line in f:
         for word in line.split():
             wrd = word.replace(".","")
             if wrd in wordList:
-                id = wordList.index(wrd)
-                for i in WHITE_LIST:
-                    if id in tagIndices[i]:
-                        print(id)
-                        val = tagIndices[i].index(id) # can optimize search by finding word tag
-                        print(val)
+                id = wordList.index(wrd) # position of word in posindex
+                for posIndex_i in WHITE_LIST:
+                    if id in tagIndices[posIndex_i]:
+                        # print(id)
+                        val = tagIndices[posIndex_i].index(id) # can optimize search by finding word tag
+                        # val is the long value corresponding to N bits of encrypted data
+                        # print(val)
+                        if debugStreamer: 
+                            debugStreamer('LONG', id)
                         break
                 # for each taggedIndex, find id where index[longval] = id
                 # meaning: longval = tagindex.index(id)
-                textBinary = '{0:015b}'.format(val)
-                print(textBinary)
+                textBinary = '{0:015b}'.format(val) # N chars : binary N bits of encrypted data
+                # print(textBinary)
+                if debugStreamer:
+                    debugStreamer('BIN', textBinary)
                 for c in textBinary:
                     yield c
 
-def read_octet_str(f):
+def read_octet_str(f, debugStreamer = None):
     binTxt = ""
     idx = 0
-    for c in read_bit_str(f):
+    for c in read_bit_str(f, debugStreamer):
         binTxt += c
         idx += 1
         if idx == 8:
@@ -174,18 +169,45 @@ def read_octet_str(f):
     if binTxt:
         yield binTxt
 
-for fil in os.listdir(pat):
-    if (fil.endswith('.encr.enc')) and os.path.exists(pat + fil):
-        filepath = os.path.join(pat, fil)
-        print filepath
-        with open(os.path.abspath(filepath), "ro") as inFile: # input file
-            decoded_file = str(filepath) + ".dec"
-            print(decoded_file)
-            with open(decoded_file, "wb") as outFile: # output file
-                # read 8 bits from input file
-                for octet in read_octet_str(inFile):
-                    if len(octet) != 8:
-                        octet = '0' * (8 - len(octet)) + octet
-                    byteBase64 = binascii.a2b_uu(octet)
-                    outFile.write(byteBase64)
+def debugStreamerProvider(decoded_idx_file):
+    flong = open(decoded_idx_file, 'w')
+    fbin = open(decoded_idx_file + '.bin', 'w')
 
+    def debugStreamerFn(type, data):
+        if type == 'BIN':
+            fbin.write("%s, " % str(data))
+        elif type == 'LONG':
+            flong.write("%s, " % str(data))
+
+    def cleaner():
+        fbin.close()
+        flong.close()
+
+    return (debugStreamerFn, cleaner)
+
+def main_decode():
+    for fil in os.listdir(pat):
+        if (fil.endswith('.encr.enc')) and os.path.exists(pat + fil):
+            filepath = os.path.join(pat, fil)
+            print filepath
+            with open(os.path.abspath(filepath), "ro") as inFile: # input file
+                decoded_file = str(filepath) + ".dec"
+                decoded_idx_file = str(filepath) + ".idx.dec"
+                print(decoded_file)
+
+                (debugStreamer, cleaner) = debugStreamerProvider(decoded_idx_file)
+                with open(decoded_file, "wb") as outFile: # output file
+                    # read 8 bits from input file as chars
+                    for octet in read_octet_str(inFile, debugStreamer):
+                        if len(octet) != 8:
+                            octet = '0' * (8 - len(octet)) + octet
+                        byteBase64 = binascii.a2b_uu(octet) # !!!!!!!!! suspicious to be broken
+                        outFile.write(byteBase64)
+                cleaner()
+
+def main():
+    main_encode()
+    main_decode()
+
+if __name__ == "__main__":
+    main()
