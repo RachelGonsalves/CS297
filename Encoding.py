@@ -9,10 +9,11 @@ from collections import defaultdict
 import pickle
 import struct
 import re
+import time
 # import binascii
 
 WHITE_LIST = ['NN','JJ','IN','RB','VB']
-
+BLACK_CHARS = ['.', '-', ',', '\'', '"', '!', '~', '`', '@', '#', '$', '%', '^', '&', '*', '(', ')', '-', '_', '+', '=', '{', '}', '[', ']', '|', '\\', ':', ';', '<', '>', '/', '?']
 
 def update(tagIndex, tag, wordIndex):
     if tag not in tagIndex:
@@ -22,19 +23,33 @@ def update(tagIndex, tag, wordIndex):
         tagWords = tagIndex[tag]
     tagWords.append(wordIndex)
 
+def cleanup(word):
+    for bc in BLACK_CHARS:
+        word = word.replace(bc, '')
+    return word
 
 def createDict():
     global WHITE_LIST
     wordList = []
     tagIndices = {}
     taggedWords = brown.tagged_words()    #http://www.scs.leeds.ac.uk/amalgam/tagsets/brown.html
+    total = len(taggedWords)
+    idx = 0
     for id, tuple in enumerate(taggedWords):
         word = tuple[0]
+
+        word = cleanup(word)
+
         tag = tuple[1]
-        if tag in WHITE_LIST:
+        if tag in WHITE_LIST and word:
             if word not in wordList:
                 wordList.append(word)
                 update(tagIndices, tag, len(wordList) - 1)
+        idx += 1
+
+        if idx % 10000 == 0:
+            print("tagIndicesDict creation progress: %f" % (idx / float(total) * 100))
+
     return (wordList, tagIndices)
 
 def saveDict(filename, wordList, tagIndices, n):
@@ -106,9 +121,10 @@ def binary2Long(f, n):
             idx += 1
         yield val
 
-#pat = '/home/rachel1105g/nltk_data/corpora/brown/'
+# pat = '/home/rachel1105g/nltk_data/corpora/brown/'
 pat = 'test_data/'
-pat = 'small_data/'
+# pat = 'small_data/'
+# pat = '/media/tadey/driveExt/git/cs266/project/src/rach297/../../nltk_data/corpora/brown'
 
 def main_encode(wordList, tagIndices, n):
 
@@ -125,13 +141,14 @@ def main_encode(wordList, tagIndices, n):
     SPACE = " "
     textStr = ""
     wrdIdxStr = ""
-    fileCount =  4
+    fileCount =  50
     for fil in os.listdir(pat):
         if (fil.endswith('.encr')) and os.path.exists(pat + fil):
+            start_time = time.time()
             filepath = os.path.join(pat, fil)
             print filepath
             fileCount -= 1
-            if fileCount == 2:
+            if fileCount == 0:
                 break
             with open(os.path.abspath(filepath), "rb") as f_encrypted:
                 longCount = 0
@@ -142,7 +159,7 @@ def main_encode(wordList, tagIndices, n):
                         posIndex = tagIndices[state]
                         wrdIdx = posIndex[longval]
                         wrd = wordList[wrdIdx]
-                        print("wrd: %s" % wrd)
+                        # print("wrd: %s" % wrd)
                         wrdIdxStr += "%s, " % str(longval)
                         textStr += wrd
                         textStr += SPACE
@@ -165,20 +182,20 @@ def main_encode(wordList, tagIndices, n):
                         STATES = STATE_LIST[num]
                         state = STATES[stateIndex]
 
-                    print("longCount: %d | wordCount: %d" % (longCount, len(re.findall(r'\w+', textStr))))
-                print("encoding.longCount: %d" % longCount)
+                    # print("longCount: %d | wordCount: %d" % (longCount, len(re.findall(r'\w+', textStr))))
+                # print("encoding.longCount: %d" % longCount)
 
             encoded_file = str(filepath) + ".enc"
             with io.FileIO(encoded_file, "w") as file:
                 file.write(textStr)
                 textStr = ""
 
-            encoded_idx_file = str(filepath) + ".wrdlstidx.enc"
-            with io.FileIO(encoded_idx_file, "w") as file:
-                file.write(wrdIdxStr)
-                wrdIdxStr = ""
+            # encoded_idx_file = str(filepath) + ".wrdlstidx.enc"
+            # with io.FileIO(encoded_idx_file, "w") as file:
+            #     file.write(wrdIdxStr)
+            #     wrdIdxStr = ""
+            print("Encoding: %s finished in %s sec" % (fil, time.time() - start_time))
 
-    print("encoding over")
 
 '''
     DECODING:
@@ -252,6 +269,7 @@ def debugStreamerProvider(decoded_idx_file):
 def main_decode(wordList, tagIndices, n):
     for fil in os.listdir(pat):
         if (fil.endswith('.encr.enc')) and os.path.exists(pat + fil):
+            start_time = time.time()
             filepath = os.path.join(pat, fil)
             print filepath
             with open(os.path.abspath(filepath), "ro") as inFile: # input file
@@ -260,6 +278,8 @@ def main_decode(wordList, tagIndices, n):
                 print(decoded_file)
 
                 (debugStreamer, cleaner) = debugStreamerProvider(decoded_idx_file)
+                debugStreamer = None
+                cleaner = None
                 with open(decoded_file, "wb") as outFile: # output file
                     # read 8 bits from input file as chars
                     for octet in read_octet_str(inFile, wordList, tagIndices, n, debugStreamer):
@@ -268,18 +288,46 @@ def main_decode(wordList, tagIndices, n):
                         byteChar = struct.pack('B', int(octet, 2))
                         # byteBase64 = binascii.a2b_uu(octet) # !!!!!!!!! suspicious to be broken
                         outFile.write(byteChar)
-                cleaner()
+                if cleaner:
+                    cleaner()
+            print("Decoding: %s finished in %s sec" % (fil, time.time() - start_time))
 
 def main():
+
+    # print("tagIndicesDict creation started...")
     # (wordList, tagIndices) = createDict()
     # dict_size = min([len(v) for k,v in tagIndices.items()])
     # n = int(math.floor(math.log(dict_size, 2))) # n is the number of bits to be replaced/block size
     # saveDict('brownTagModel', wordList, tagIndices, n)
-    (wordList, tagIndices, n) = loadDict('brownTagModel')
-    print(n)
+    # print("tagIndicesDict saved...")
+    
+    start_time = time.time()
 
+    print("Loading tagIndicesDict from pickle...")
+    (wordList, tagIndices, n) = loadDict('brownTagModel')
+    print("tagIndicesDict loaded from pickle...")
+
+    print("n=%d" % n)
+
+    print("Step: %s finished in %s sec" % ('Load taggedIndicesDict', time.time() - start_time))
+    
+    print("")
+    print("")
+
+    print("Encoding start...")
+    start_time = time.time()
     main_encode(wordList, tagIndices, n)
+    print("Step: %s finished in %s sec" % ('Encoding', time.time() - start_time))
+    print("...Encoding complete")
+
+    print("")
+    print("")
+
+    print("Decoding start...")
+    start_time = time.time()
     main_decode(wordList, tagIndices, n)
+    print("Step: %s finished in %s sec" % ('Decoding', time.time() - start_time))
+    print("...Decoding complete")
 
 if __name__ == "__main__":
     main()
