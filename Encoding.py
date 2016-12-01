@@ -6,9 +6,8 @@ from random import randint
 import nltk
 from nltk.corpus import brown
 from collections import defaultdict
+import pickle
 
-wordList = []
-tagIndices = {}
 WHITE_LIST = ['NN','JJ','IN','RB','VB']
 
 
@@ -22,18 +21,39 @@ def update(tagIndex, tag, wordIndex):
 
 
 def createDict():
-    global wordList
-    global tagIndices
     global WHITE_LIST
+    wordList = []
+    tagIndices = {}
     taggedWords = brown.tagged_words()    #http://www.scs.leeds.ac.uk/amalgam/tagsets/brown.html
     for id, tuple in enumerate(taggedWords):
         word = tuple[0]
         tag = tuple[1]
         if tag in WHITE_LIST:
-            wordList.append(word)
-            update(tagIndices, tag, len(wordList) - 1)
+            if word not in wordList:
+                wordList.append(word)
+                update(tagIndices, tag, len(wordList) - 1)
+    return (wordList, tagIndices)
 
+def saveDict(filename, wordList, tagIndices, n):
+    import pickle
+    model = {'wordList': wordList, 'tagIndices': tagIndices, 'n': n}
+    s = pickle.dumps(model)
+    with open(filename, 'w') as f:
+        f.write(s)
 
+def loadDict(filename):
+    with open(filename, 'r') as f:
+        modelSerialized = f.read()
+    model = pickle.loads(modelSerialized)
+    
+    wordList = model['wordList']
+    tagIndices = model['tagIndices']
+    n = model['n']
+    return (wordList, tagIndices, n)
+
+'''
+ENCODING:
+'''
 def bits(f):
     bytes = (ord(b) for b in f.read())
     for b in bytes:
@@ -58,18 +78,11 @@ def binary2Long(f, n):
     if val > 0:
         yield val
 
-createDict()
-
-dict_size = min([len(v) for k,v in tagIndices.items()])
-
-n = int(math.floor(math.log(dict_size, 2))) # n is the number of bits to be replaced/block size
-print(n)
-
 #pat = '/home/rachel1105g/nltk_data/corpora/brown/'
 pat = 'test_data/'
 pat = 'small_data/'
 
-def main_encode():
+def main_encode(wordList, tagIndices, n):
 
     STATES1 = ['JJ', 'NN', 'VB', 'period'] #adjective noun verb period
     STATES2 = ['NN', 'VB', 'RB', 'period']# noun verb adverb period
@@ -115,7 +128,7 @@ def main_encode():
                 stateIndex += 1
 
             encoded_file = str(filepath) + ".enc"
-            encoded_idx_file = str(filepath) + ".idx.enc"
+            encoded_idx_file = str(filepath) + ".wrdlstidx.enc"
             with io.FileIO(encoded_file, "w") as file:
                 file.write(textStr)
                 textStr = ""
@@ -132,12 +145,14 @@ def main_encode():
 '''
 import binascii
 
-def read_bit_str(f, debugStreamer = None):
+def read_bit_str(f, wordList, tagIndices, n, debugStreamer = None):
     for line in f:
         for word in line.split():
             wrd = word.replace(".","")
             if wrd in wordList:
                 id = wordList.index(wrd) # position of word in posindex
+                # print("FOUND: %s : %d" % (wrd, id))
+                found = False
                 for posIndex_i in WHITE_LIST:
                     if id in tagIndices[posIndex_i]:
                         # print(id)
@@ -146,20 +161,26 @@ def read_bit_str(f, debugStreamer = None):
                         # print(val)
                         if debugStreamer: 
                             debugStreamer('LONG', id)
+                        found = True
                         break
+                if not found:
+                    print("ERROR: Encoded Word not found in any taglist: %s" % wrd)
                 # for each taggedIndex, find id where index[longval] = id
                 # meaning: longval = tagindex.index(id)
-                textBinary = '{0:015b}'.format(val) # N chars : binary N bits of encrypted data
+                formatStr = "{0:0%db}" % n
+                textBinary = formatStr.format(val) # N chars : binary N bits of encrypted data
                 # print(textBinary)
                 if debugStreamer:
                     debugStreamer('BIN', textBinary)
                 for c in textBinary:
                     yield c
-
-def read_octet_str(f, debugStreamer = None):
+            else:
+                print("ERROR: Encoded Word not found wrdList: %s" % wrd)
+                
+def read_octet_str(f, wordList, tagIndices, n, debugStreamer = None):
     binTxt = ""
     idx = 0
-    for c in read_bit_str(f, debugStreamer):
+    for c in read_bit_str(f, wordList, tagIndices, n, debugStreamer):
         binTxt += c
         idx += 1
         if idx == 8:
@@ -185,20 +206,20 @@ def debugStreamerProvider(decoded_idx_file):
 
     return (debugStreamerFn, cleaner)
 
-def main_decode():
+def main_decode(wordList, tagIndices, n):
     for fil in os.listdir(pat):
         if (fil.endswith('.encr.enc')) and os.path.exists(pat + fil):
             filepath = os.path.join(pat, fil)
             print filepath
             with open(os.path.abspath(filepath), "ro") as inFile: # input file
                 decoded_file = str(filepath) + ".dec"
-                decoded_idx_file = str(filepath) + ".idx.dec"
+                decoded_idx_file = str(filepath) + ".wrdlstidx.dec"
                 print(decoded_file)
 
                 (debugStreamer, cleaner) = debugStreamerProvider(decoded_idx_file)
                 with open(decoded_file, "wb") as outFile: # output file
                     # read 8 bits from input file as chars
-                    for octet in read_octet_str(inFile, debugStreamer):
+                    for octet in read_octet_str(inFile, wordList, tagIndices, n, debugStreamer):
                         if len(octet) != 8:
                             octet = '0' * (8 - len(octet)) + octet
                         byteBase64 = binascii.a2b_uu(octet) # !!!!!!!!! suspicious to be broken
@@ -206,8 +227,15 @@ def main_decode():
                 cleaner()
 
 def main():
-    main_encode()
-    main_decode()
+    # (wordList, tagIndices) = createDict()
+    # dict_size = min([len(v) for k,v in tagIndices.items()])
+    # n = int(math.floor(math.log(dict_size, 2))) # n is the number of bits to be replaced/block size
+    # saveDict('brownTagModel', wordList, tagIndices, n)
+    (wordList, tagIndices, n) = loadDict('brownTagModel')
+    print(n)
+
+    main_encode(wordList, tagIndices, n)
+    main_decode(wordList, tagIndices, n)
 
 if __name__ == "__main__":
     main()
