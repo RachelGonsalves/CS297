@@ -8,6 +8,7 @@ from nltk.corpus import brown
 from collections import defaultdict
 import pickle
 import struct
+import re
 # import binascii
 
 WHITE_LIST = ['NN','JJ','IN','RB','VB']
@@ -57,27 +58,39 @@ def loadDict(filename):
 ENCODING:
 '''
 def bits(f):
-    bytes = (ord(b) for b in f.read())
-    for b in bytes:
+    bytesFound = 0
+    while True:
+        chByte = f.read(1)
+        if not chByte:
+            break
+        bytesFound += 1
+        numByte = ord(chByte)
         for i in xrange(8):
-            yield (b >> i) & 1
+            yield (numByte >> i) & 1
+    print("encoding.bytesFound: %d" % bytesFound)
 
 def binary2Long(f, n):
     v1 = long(1)
     idx = 0
     val = 0
+    bitsCount = 0
     for b in bits(f):
+        bitsCount += 1
         if idx == n:
             yield val
-            v = v1 & b
-            idx = 1
-            val = v
+            idx = 0
+            val = v1 & b
         else:
             if b == 1:
                 v = v1 << idx
                 val += v
-            idx += 1
+        idx += 1
+    print("encoding.bitsFound : %d, n : %d" % (bitsCount, n))
     if val > 0:
+        print("Adding %d pad" % (n - idx))
+        while idx != n: # append 0s to match n boundary- needed to ignore the offset while decoding
+            val << 1
+            idx += 1
         yield val
 
 #pat = '/home/rachel1105g/nltk_data/corpora/brown/'
@@ -86,13 +99,15 @@ pat = 'small_data/'
 
 def main_encode(wordList, tagIndices, n):
 
+    # assuming all state lists end with 'period'
     STATES1 = ['JJ', 'NN', 'VB', 'period'] #adjective noun verb period
     STATES2 = ['NN', 'VB', 'RB', 'period']# noun verb adverb period
     STATES3 = ['NN', 'VB', 'IN', 'NN','period']# noun verb preposition noun period
     stateIndex = 0
-    STATE =[STATES1,STATES2,STATES3]
+    STATE_LIST =[STATES1,STATES2,STATES3]
     num = randint(0, 2)
-    STATES = STATE[num]
+    STATES = STATE_LIST[num]
+    state = STATES[stateIndex]
 
     SPACE = " "
     textStr = ""
@@ -105,49 +120,61 @@ def main_encode(wordList, tagIndices, n):
             fileCount -= 1
             if fileCount == 2:
                 break
-            f = open(os.path.abspath(filepath), "rb")
-            for longval in binary2Long(f, n):
-                if stateIndex == len(STATES):
-                    stateIndex = 0
-                    num = randint(0, 2)
-                    STATES = STATE[num]
+            with open(os.path.abspath(filepath), "rb") as f_encrypted:
+                longCount = 0
+                for longval in binary2Long(f_encrypted, n):
+                    #pull word form state and longval
+                    longCount += 1
+                    if state in tagIndices:
+                        posIndex = tagIndices[state]
+                        wrdIdx = posIndex[longval]
+                        wrd = wordList[wrdIdx]
+                        print("wrd: %s" % wrd)
+                        wrdIdxStr += "%s, " % str(longval)
+                        textStr += wrd
+                        textStr += SPACE
+                    else:
+                        print("ERROR: state not found in tagIndices: %s" % state)
 
-                state = STATES[stateIndex]
-                if state in tagIndices:
-                    posindex = tagIndices[state]
+                    # perform state management
+                    stateIndex += 1
+                    state = STATES[stateIndex]
+                    # if stateIndex == len(STATES):
+                        # stateIndex = 0
+                        # num = randint(0, 2)
+                        # STATES = STATE_LIST[num]
+                    if state == 'period': # assuming all state lists end with 'period'
+                        textStr = textStr[:-1] # remove trailing space
+                        textStr += '.'
+                        textStr += SPACE
+                        stateIndex = 0
+                        num = randint(0, 2)
+                        STATES = STATE_LIST[num]
+                        state = STATES[stateIndex]
 
-                    # tagLen = len(index)
-                    idx = longval
-                    wrdIdx = posindex[idx]
-                    wrd = wordList[wrdIdx]
-                    wrdIdxStr += "%s, " % str(wrdIdx)
-                    textStr += wrd
-                    textStr += SPACE
-                else:
-                    textStr = textStr[:-1]
-                    textStr += '.'
-                    textStr += SPACE
-                stateIndex += 1
+                    print("longCount: %d | wordCount: %d" % (longCount, len(re.findall(r'\w+', textStr))))
+                print("encoding.longCount: %d" % longCount)
 
             encoded_file = str(filepath) + ".enc"
-            encoded_idx_file = str(filepath) + ".wrdlstidx.enc"
             with io.FileIO(encoded_file, "w") as file:
                 file.write(textStr)
                 textStr = ""
+
+            encoded_idx_file = str(filepath) + ".wrdlstidx.enc"
             with io.FileIO(encoded_idx_file, "w") as file:
                 file.write(wrdIdxStr)
                 wrdIdxStr = ""
 
-    print(textStr)
-    f.close()
     print("encoding over")
 
 '''
     DECODING:
 '''
 def read_bit_str(f, wordList, tagIndices, n, debugStreamer = None):
+    wrdCount = 0
     for line in f:
         for word in line.split():
+            wrdCount += 1
             wrd = word.replace(".","")
             if wrd in wordList:
                 id = wordList.index(wrd) # position of word in posindex
@@ -160,7 +187,7 @@ def read_bit_str(f, wordList, tagIndices, n, debugStreamer = None):
                         # val is the long value corresponding to N bits of encrypted data
                         # print(val)
                         if debugStreamer: 
-                            debugStreamer('LONG', id)
+                            debugStreamer('LONG', val)
                         found = True
                         break
                 if not found:
@@ -176,6 +203,7 @@ def read_bit_str(f, wordList, tagIndices, n, debugStreamer = None):
                     yield c
             else:
                 print("ERROR: Encoded Word not found wrdList: %s" % wrd)
+    print("Decoding.wrdCount: %d" % wrdCount)
 
 def read_octet_str(f, wordList, tagIndices, n, debugStreamer = None):
     binTxt = ""
@@ -187,8 +215,8 @@ def read_octet_str(f, wordList, tagIndices, n, debugStreamer = None):
             yield binTxt # 8 bits out of n bits
             idx = 0
             binTxt = ""
-    if binTxt:
-        yield binTxt
+    # if binTxt: # ignore last unaligned bits
+    #     yield binTxt
 
 def debugStreamerProvider(decoded_idx_file):
     flong = open(decoded_idx_file, 'w')
