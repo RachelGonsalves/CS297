@@ -7,6 +7,8 @@ import nltk
 from nltk.corpus import brown
 from collections import defaultdict
 import pickle
+import struct
+# import binascii
 
 WHITE_LIST = ['NN','JJ','IN','RB','VB']
 
@@ -143,8 +145,6 @@ def main_encode(wordList, tagIndices, n):
 '''
     DECODING:
 '''
-import binascii
-
 def read_bit_str(f, wordList, tagIndices, n, debugStreamer = None):
     for line in f:
         for word in line.split():
@@ -172,11 +172,11 @@ def read_bit_str(f, wordList, tagIndices, n, debugStreamer = None):
                 # print(textBinary)
                 if debugStreamer:
                     debugStreamer('BIN', textBinary)
-                for c in textBinary:
+                for c in textBinary: #n bits
                     yield c
             else:
                 print("ERROR: Encoded Word not found wrdList: %s" % wrd)
-                
+
 def read_octet_str(f, wordList, tagIndices, n, debugStreamer = None):
     binTxt = ""
     idx = 0
@@ -184,7 +184,7 @@ def read_octet_str(f, wordList, tagIndices, n, debugStreamer = None):
         binTxt += c
         idx += 1
         if idx == 8:
-            yield binTxt
+            yield binTxt # 8 bits out of n bits
             idx = 0
             binTxt = ""
     if binTxt:
@@ -222,8 +222,9 @@ def main_decode(wordList, tagIndices, n):
                     for octet in read_octet_str(inFile, wordList, tagIndices, n, debugStreamer):
                         if len(octet) != 8:
                             octet = '0' * (8 - len(octet)) + octet
-                        byteBase64 = binascii.a2b_uu(octet) # !!!!!!!!! suspicious to be broken
-                        outFile.write(byteBase64)
+                        byteChar = struct.pack('B', int(octet, 2))
+                        # byteBase64 = binascii.a2b_uu(octet) # !!!!!!!!! suspicious to be broken
+                        outFile.write(byteChar)
                 cleaner()
 
 def main():
