@@ -57,6 +57,16 @@ def loadDict(filename):
 '''
 ENCODING:
 '''
+def bits_raw(f):
+    while True:
+        chByte = f.read(1)
+        if not chByte:
+            break
+        numByte = ord(chByte)
+        print("num: %d, bin: %s" % (numByte, "{0:08b}".format(numByte)) )
+        for i in xrange(8):
+            yield (numByte >> i) & 1
+
 def bits(f):
     bytesFound = 0
     while True:
@@ -65,8 +75,11 @@ def bits(f):
             break
         bytesFound += 1
         numByte = ord(chByte)
-        for i in xrange(8):
-            yield (numByte >> i) & 1
+        # guaranteed to have byte boundary due to AES
+        bitsStr = "{0:08b}".format(numByte)
+        bitsStrLE = bitsStr[::-1] # string.reverse: handling little-endianness
+        for b in bitsStrLE:
+            yield int(b)
     print("encoding.bytesFound: %d" % bytesFound)
 
 def binary2Long(f, n):
@@ -197,9 +210,10 @@ def read_bit_str(f, wordList, tagIndices, n, debugStreamer = None):
                 formatStr = "{0:0%db}" % n
                 textBinary = formatStr.format(val) # N chars : binary N bits of encrypted data
                 # print(textBinary)
-                if debugStreamer:
-                    debugStreamer('BIN', textBinary)
-                for c in textBinary: #n bits
+                # if debugStreamer:
+                #     debugStreamer('BIN', textBinary)
+                textBinaryLE = textBinary[::-1] # string.reverse: handling little-endianness
+                for c in textBinaryLE: #n bits
                     yield c
             else:
                 print("ERROR: Encoded Word not found wrdList: %s" % wrd)
@@ -212,7 +226,8 @@ def read_octet_str(f, wordList, tagIndices, n, debugStreamer = None):
         binTxt += c
         idx += 1
         if idx == 8:
-            yield binTxt # 8 bits out of n bits
+            binTxtLE = binTxt[::-1] # string.reverse: handling little-endianness
+            yield binTxtLE # 8 bits out of n bits
             idx = 0
             binTxt = ""
     # if binTxt: # ignore last unaligned bits

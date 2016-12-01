@@ -31,12 +31,15 @@ def decrypt_file(key, in_filename, out_filename=None, chunksize=24*1024):
             while True:
                 chunk = infile.read(chunksize)
                 if len(chunk) == 0:
+                    print("Empty chunk")
                     break
-                outfile.write(decryptor.decrypt(chunk))
+                else:
+                    # print(chunk)
+                    outfile.write(decryptor.decrypt(chunk))
 
             outfile.truncate(origsize)
 
 for fil in os.listdir(pat):
-    if (fil.endswith('.dec')) and os.path.exists(pat + fil):
+    if (fil.endswith('enc.dec')) and os.path.exists(pat + fil):
         print(fil)
         decrypt_file(keyin, pat+fil)
