@@ -1,4 +1,4 @@
-import math, pickle, struct, io
+import math, pickle, struct, io, binascii,re, os
 import numpy as np
 
 lis = [1/math.pow(2,i) for i in range(20)]
@@ -93,8 +93,8 @@ def binarization(A):
     return BIN_RP
     # print(BIN_ORP)
     # print(BIN_RP)
-
-with open('outA.txt', 'rb') as fp:
+l = str(27)
+with open('outA'+l+'.txt', 'rb') as fp:
     tran_mat = pickle.load(fp)
     tran_mat = rounding(tran_mat)
     print('{}{}'.format("Transition matrix A: ", tran_mat))
@@ -104,7 +104,7 @@ with open('outA.txt', 'rb') as fp:
         print(row)
 
 
-with open('outB.txt', 'rb') as fp:
+with open('outB'+l+'.txt', 'rb') as fp:
     B = pickle.load(fp)
     B_argmax = [max(row) for row in B]
     B_letter = [np.where(row == max(row)) for row in B]
@@ -125,7 +125,7 @@ with open('outB.txt', 'rb') as fp:
     print(descSortedB)
 
 
-with open('outPI.txt', 'rb') as fp:
+with open('outPI'+l+'.txt', 'rb') as fp:
     pi = pickle.load(fp)
     pi_argmax = max(pi)
     print(pi)
@@ -162,50 +162,60 @@ start_state, = np.where(pi==pi_argmax)
 initial_start_state = int(start_state[0])
 start_state = int(start_state[0])
 print('{}{}'.format("start_state: ",start_state))
-encoded_stream = ""
-filepath = "testy_data/cb01.encr"
-with open(filepath, 'rb') as f:
-    stream = bits(f)
-    # print("".join(stream))
-    newstream = "".join(stream)
-    print(newstream)
 
-    print(binary_tran_mat[start_state - 1])
 
-    prev = 0
-    replacement = 0
-    current_stream_start = 0
-    while current_stream_start != len(newstream):
-        # count = 0
-        # print(newstream[current_stream_start:])
-        if newstream[current_stream_start:].startswith('0'):
-            replacement = '0'
-        else:
-            for i in binary_tran_mat[start_state]:
-                # print(i[2:])
-                if newstream[current_stream_start:].startswith(i[2:]):
-                    if len(i[2:]) > prev:
-                        # print("repli")
-                        # print(len(i[2:]))
-                        replacement = i[2:]
-                    prev = len(i[2:])
+pat = 'rach/'
+for fil in os.listdir(pat):
+    if (fil.endswith('.encr')) and os.path.exists(pat + fil):
+        filepath = os.path.join(pat, fil)
+        with open(os.path.abspath(filepath), "rb") as f:
+            encoded_stream = ""
+        # filepath = "testy_data/cb01.encr"
+        # with open(filepath, 'rb') as f:
+            stream = bits(f)
+            # print("".join(stream))
+            newstream = "".join(stream)
+            print(newstream)
 
-        next_state = binary_tran_mat[start_state].index('0b' + replacement)
-        if tran_char[start_state][next_state] == None:
-            prob = descSortedB[start_state].pop(0)
-            # print(prob)
-            if prob[0] == 26:
-                tran_char[start_state][next_state] = ' '
-            else:
-                tran_char[start_state][next_state] = chr(prob[0] + 97)
+            print(binary_tran_mat[start_state - 1])
 
-        encoded_stream += tran_char[start_state][next_state]
-        start_state = next_state
-        current_stream_start += len(replacement)
-        # print(replacement)
-        # print(next_state)
+            prev = 0
+            replacement = 0
+            current_stream_start = 0
+            while current_stream_start != len(newstream):
+                # count = 0
+                # print(newstream[current_stream_start:])
+                if newstream[current_stream_start:].startswith('0'):
+                    replacement = '0'
+                else:
+                    for i in binary_tran_mat[start_state]:
+                        # print(i[2:])
+                        if newstream[current_stream_start:].startswith(i[2:]):
+                            if len(i[2:]) > prev:
+                                # print("repli")
+                                # print(len(i[2:]))
+                                replacement = i[2:]
+                            prev = len(i[2:])
 
-print(newstream)
+                next_state = binary_tran_mat[start_state].index('0b' + replacement)
+                if tran_char[start_state][next_state] == None:
+                    prob = descSortedB[start_state].pop(0)
+                    # print(prob)
+                    if prob[0] == 26:
+                        tran_char[start_state][next_state] = ' '
+                    else:
+                        tran_char[start_state][next_state] = chr(prob[0] + 97)
+
+                encoded_stream += tran_char[start_state][next_state]
+                start_state = next_state
+                current_stream_start += len(replacement)
+                # print(replacement)
+                # print(next_state)
+    encoded_file = str(filepath) + ".enc"
+    with io.FileIO(encoded_file, "w") as file:
+        file.write(encoded_stream)
+        # textStr = ""
+# print(newstream)
 print(encoded_stream)
 
 # print(tran_char)
@@ -226,15 +236,27 @@ with io.FileIO(encoded_file, "w") as file:
     file.write(encoded_stream)
     # textStr = ""
 
+
 # strt = 0
+# actual_string = ""
 # write_stream = ""
+#
 # for i in decoded_stream:
 #     strm = decoded_stream[strt:strt + 8]
-#     # write_stream += chr(int(strm[::-1]))
-#     print(struct.pack('B', int(strm, 2)))
+#     strm = strm[::-1]
+#     actual_string += strm
+#     # print(strm)
+#     strm = (strm.lstrip("0"))
+#     # write_stream += (struct.pack('B', int(strm)))
 #     strt += 8
+#     if strm == " " or strm == '':
+#         strm = '0'
+#     write_stream += ('%x' % int(strm, 2)).decode('hex').decode('utf-8')
 #
-# print(write_stream)
+#     # write_stream =(''.join([chr(int(x, 2)) for x in re.split('(........)',actual_string) if x])).decode('utf-8')
+# with open('outfile', 'wb') as f:
+#     f.write(write_stream)
+
 
 if decoded_stream == newstream:
     print("decoded_stream MATCHES to new stream")
