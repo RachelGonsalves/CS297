@@ -129,6 +129,8 @@ with open('outPI'+l+'.txt', 'rb') as fp:
     pi = pickle.load(fp)
     pi_argmax = max(pi)
     print(pi)
+    ord_pi = [x[0] for x in sorted(enumerate(pi), key=lambda x: x[1], reverse=True)]
+    print('{}{}'.format("ord PI: ", ord_pi))
     # print(pi[141])
     # print(np.where(pi==pi_argmax))
 
@@ -149,92 +151,114 @@ def bits(f):
     return stream
     # print("Stream: %s" % stream)
 
+#Emission graph
+N = len(binary_tran_mat)
+emission_graph = [['-']*N for i in range(N)]
+
+# log_A = np.log(tran_mat)
+# print(log_A)
+# log_B = np.log(B)
+# print(log_B)
+# for row in descSortedB:
+def elem(num):
+    if num == 26:
+        b = ' '
+    else:
+        b = chr(num + 97)
+    return b
+
+for i in range(N):
+    for j in range(N):
+        let = elem((descSortedB[j][0])[0])
+        # print(let)
+        # print(let)
+        # print(emission_graph)
+
+        if let in emission_graph[i]:
+            for k in range(1,len(descSortedB[j])):
+                # print(let)
+                # print(emission_graph)
+                if elem((descSortedB[j][k])[0]) not in emission_graph[i]:
+                    let = elem((descSortedB[j].pop(k))[0])
+                    break
+        else:
+            let = elem((descSortedB[j].pop(0))[0])
+
+        emission_graph[i][j] = let
+
+
+print('{}{}'.format("Emission Graph: ", emission_graph))
+
+
+
+
 
 #ENCODING
-tran_char = []
-N = len(binary_tran_mat)
-# N = 150
-for j in range(N):
-    tran_char.append([None for i in range(N)])
-print(tran_char)
 
-start_state, = np.where(pi==pi_argmax)
-initial_start_state = int(start_state[0])
-start_state = int(start_state[0])
-print('{}{}'.format("start_state: ",start_state))
+# filepath = "testy_data/cb01.encr"
+# with open(filepath, 'rb') as f:
 
-
-pat = 'rach/'
+pat = 'letter/20/'
 for fil in os.listdir(pat):
+    start_state, = np.where(pi == pi_argmax)
+    initial_start_state = int(start_state[0])
+    start_state = int(start_state[0])
+    # print('{}{}'.format("start_state: ", start_state))
+
     if (fil.endswith('.encr')) and os.path.exists(pat + fil):
         filepath = os.path.join(pat, fil)
+        print(filepath)
         with open(os.path.abspath(filepath), "rb") as f:
             encoded_stream = ""
-        # filepath = "testy_data/cb01.encr"
-        # with open(filepath, 'rb') as f:
-            stream = bits(f)
-            # print("".join(stream))
-            newstream = "".join(stream)
-            print(newstream)
 
-            print(binary_tran_mat[start_state - 1])
+            stream = bits(f)
+            newstream = "".join(stream)
+            # print(newstream)
+            # print(binary_tran_mat[start_state])
 
             prev = 0
             replacement = 0
             current_stream_start = 0
             while current_stream_start != len(newstream):
-                # count = 0
-                # print(newstream[current_stream_start:])
                 if newstream[current_stream_start:].startswith('0'):
                     replacement = '0'
                 else:
                     for i in binary_tran_mat[start_state]:
-                        # print(i[2:])
                         if newstream[current_stream_start:].startswith(i[2:]):
                             if len(i[2:]) > prev:
-                                # print("repli")
-                                # print(len(i[2:]))
                                 replacement = i[2:]
                             prev = len(i[2:])
 
                 next_state = binary_tran_mat[start_state].index('0b' + replacement)
-                if tran_char[start_state][next_state] == None:
-                    prob = descSortedB[start_state].pop(0)
-                    # print(prob)
-                    if prob[0] == 26:
-                        tran_char[start_state][next_state] = ' '
-                    else:
-                        tran_char[start_state][next_state] = chr(prob[0] + 97)
+                # if tran_char[start_state][next_state] == None:
+                #     prob = descSortedB[start_state].pop(0)
+                #     if prob[0] == 26:
+                #            tran_char[start_state][next_state] = ' '
+                #     else:
+                #         tran_char[start_state][next_state] = chr(prob[0] + 97)
 
-                encoded_stream += tran_char[start_state][next_state]
+                encoded_stream += emission_graph[start_state][next_state]
                 start_state = next_state
                 current_stream_start += len(replacement)
-                # print(replacement)
-                # print(next_state)
     encoded_file = str(filepath) + ".enc"
     with io.FileIO(encoded_file, "w") as file:
         file.write(encoded_stream)
         # textStr = ""
 # print(newstream)
-print(encoded_stream)
+# print(encoded_stream)
 
 # print(tran_char)
 #DECODING
-rev_start_state = initial_start_state
-decoded_stream = ""
-for i in encoded_stream:
-    rev_next_state = tran_char[rev_start_state].index(i)
-    decoded_stream += binary_tran_mat[rev_start_state][rev_next_state][2:]
-    rev_start_state = rev_next_state
-
-print(decoded_stream)
+# rev_start_state = initial_start_state
+# decoded_stream = ""
+# for i in encoded_stream:
+#     rev_next_state = tran_char[rev_start_state].index(i)
+#     decoded_stream += binary_tran_mat[rev_start_state][rev_next_state][2:]
+#     rev_start_state = rev_next_state
+#
+# print(decoded_stream)
 
 # print(decoded_stream == newstream)
-
-encoded_file = str(filepath) + ".enc"
-with io.FileIO(encoded_file, "w") as file:
-    file.write(encoded_stream)
-    # textStr = ""
 
 
 # strt = 0
@@ -258,7 +282,7 @@ with io.FileIO(encoded_file, "w") as file:
 #     f.write(write_stream)
 
 
-if decoded_stream == newstream:
-    print("decoded_stream MATCHES to new stream")
-else:
-    print("decoded_stream DOES NOT MATCH to new stream")
+# if decoded_stream == newstream:
+#     print("decoded_stream MATCHES to new stream")
+# else:
+#     print("decoded_stream DOES NOT MATCH to new stream")
