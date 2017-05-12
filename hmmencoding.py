@@ -1,9 +1,12 @@
-import math, pickle, struct, io, binascii,re, os
+import math, pickle, struct, io, binascii,re, os,random, hashlib
 import numpy as np
+from Crypto.Cipher import AES
+from practice import TOE_HMM_CHARS
+model = TOE_HMM_CHARS.loadHMM('brown_chars_N6.hmm')
 
 lis = [1/math.pow(2,i) for i in range(20)]
-print(lis)
 
+#Rounding
 def rounding(A):
     for row in A:
         for id_i, val_i in enumerate(row):
@@ -27,12 +30,9 @@ def rounding(A):
                 row_reversed = row[::-1]
                 id = row_reversed.index(minimum)
                 row_reversed[id] += diff
-                # print(row_reversed[::-1])
-                # print(A[id])
                 row_new = row_reversed[::-1]
                 for i,v in enumerate(row):
                     row[i] = row_new[i]
-                # print(A[id])
     return A
 
 def div(a,b):
@@ -41,11 +41,10 @@ def div(a,b):
     else:
         return (a/b)
 
+#Binarization
 def binarization(A):
-    # print(A)
     # taking already rounded probabilities
     # sorting each row transition matrix A in descending order and storing in ORP and storing index in IRP
-
     ORP, IRP, BIN_ORP,BIN_RP= ([] for i in range(4))
 
     for row in A:
@@ -57,7 +56,6 @@ def binarization(A):
 
     for row_ORP in ORP:
         row_BIN_ORP = []
-        # row_BIN_ORP.append((int(math.log(int(div(1,row_ORP[0])),2))))
         row_BIN_ORP.append(0)
 
         last_input = row_ORP[0]
@@ -69,7 +67,6 @@ def binarization(A):
         while j<k:
             if row_ORP[j] == 0:
                 row_BIN_ORP.append('-')
-                # diff = int(math.log(int(div(1, row_ORP[j])), 2)) - num
             elif row_ORP[j] == last_input:
                 row_BIN_ORP.append(int(last_output + 1))
                 diff = int(math.log(int(div(1,row_ORP[j])), 2)) - num
@@ -87,13 +84,12 @@ def binarization(A):
 
     for row in IRP:
         tup = zip(row,BIN_ORP[IRP.index(row)])
-        # BIN_RP.append([bin(i[1]) for i in sorted(tup, key=lambda x: x[0])])
         BIN_RP.append([bin(i[1]) if i[1] is not '-' else '-' for i in sorted(tup, key=lambda x: x[0])])
 
     return BIN_RP
-    # print(BIN_ORP)
-    # print(BIN_RP)
+
 l = str(27)
+
 with open('outA'+l+'.txt', 'rb') as fp:
     tran_mat = pickle.load(fp)
     tran_mat = rounding(tran_mat)
@@ -112,12 +108,10 @@ with open('outB'+l+'.txt', 'rb') as fp:
     print(B_letter)
     print(B_argmax)
     for i in B_letter:
-        # print(i[0][0])
         if i[0][0] == 26:
             letter.append(' ')
         else:
             letter.append(chr(i[0][0]+97))
-    # print('{}{}'.format("Letter: ", letter))
     descSortedB = []
     for row in B:
         descSortedB_row = sorted(enumerate(row), key=lambda x: x[1], reverse=True)
@@ -131,8 +125,6 @@ with open('outPI'+l+'.txt', 'rb') as fp:
     print(pi)
     ord_pi = [x[0] for x in sorted(enumerate(pi), key=lambda x: x[1], reverse=True)]
     print('{}{}'.format("ord PI: ", ord_pi))
-    # print(pi[141])
-    # print(np.where(pi==pi_argmax))
 
 
 def bits(f):
@@ -149,17 +141,13 @@ def bits(f):
         bitsStrLE = bitsStr[::-1]  # string.reverse: handling little-endianness
         stream.append(bitsStrLE)
     return stream
-    # print("Stream: %s" % stream)
+
+descB = descSortedB
 
 #Emission graph
 N = len(binary_tran_mat)
 emission_graph = [['-']*N for i in range(N)]
 
-# log_A = np.log(tran_mat)
-# print(log_A)
-# log_B = np.log(B)
-# print(log_B)
-# for row in descSortedB:
 def elem(num):
     if num == 26:
         b = ' '
@@ -169,42 +157,50 @@ def elem(num):
 
 for i in range(N):
     for j in range(N):
-        let = elem((descSortedB[j][0])[0])
-        # print(let)
-        # print(let)
-        # print(emission_graph)
-
-        if let in emission_graph[i]:
-            for k in range(1,len(descSortedB[j])):
-                # print(let)
-                # print(emission_graph)
-                if elem((descSortedB[j][k])[0]) not in emission_graph[i]:
-                    let = elem((descSortedB[j].pop(k))[0])
-                    break
+        flag = True
+        if len(descB[j]) != 0:
+            let = elem((descB[j][0])[0])
+            if let in emission_graph[i]:
+                while flag:
+                    for k in range(1,len(descB[j])):
+                        if elem((descB[j][k])[0]) not in emission_graph[i]:
+                            flag = False
+                            let = elem(((descB[j]).pop(k))[0])
+                            break
+                    m = 0
+                    while flag:
+                        for l in range(len(descB[m])):
+                            if elem((descB[m][l])[0]) not in emission_graph[i]:
+                                flag = False
+                                let = elem(((descB[m]).pop(l))[0])
+                                break
+                        m +=  1
+            else:
+                let = elem((descB[j].pop(0))[0])
         else:
-            let = elem((descSortedB[j].pop(0))[0])
-
+            m = 0
+            while flag:
+                if len(descB[m]) != 0:
+                    for l in range(len(descB[m])):
+                        if elem((descB[m][l])[0]) not in emission_graph[i]:
+                            flag = False
+                            let = elem(((descB[m]).pop(l))[0])
+                            break
+                m += 1
         emission_graph[i][j] = let
 
 
-print('{}{}'.format("Emission Graph: ", emission_graph))
-
-
-
-
+# print('{}{}'.format("Emission Graph: ", emission_graph))
 
 #ENCODING
 
-# filepath = "testy_data/cb01.encr"
-# with open(filepath, 'rb') as f:
+start_state, = np.where(pi == pi_argmax)
+initial_start_state = int(start_state[0])
 
-pat = 'letter/20/'
+
+pat = 'letter/27/'
 for fil in os.listdir(pat):
-    start_state, = np.where(pi == pi_argmax)
-    initial_start_state = int(start_state[0])
-    start_state = int(start_state[0])
-    # print('{}{}'.format("start_state: ", start_state))
-
+    start_state = initial_start_state
     if (fil.endswith('.encr')) and os.path.exists(pat + fil):
         filepath = os.path.join(pat, fil)
         print(filepath)
@@ -213,8 +209,6 @@ for fil in os.listdir(pat):
 
             stream = bits(f)
             newstream = "".join(stream)
-            # print(newstream)
-            # print(binary_tran_mat[start_state])
 
             prev = 0
             replacement = 0
@@ -230,56 +224,41 @@ for fil in os.listdir(pat):
                             prev = len(i[2:])
 
                 next_state = binary_tran_mat[start_state].index('0b' + replacement)
-                # if tran_char[start_state][next_state] == None:
-                #     prob = descSortedB[start_state].pop(0)
-                #     if prob[0] == 26:
-                #            tran_char[start_state][next_state] = ' '
-                #     else:
-                #         tran_char[start_state][next_state] = chr(prob[0] + 97)
-
                 encoded_stream += emission_graph[start_state][next_state]
                 start_state = next_state
                 current_stream_start += len(replacement)
-    encoded_file = str(filepath) + ".enc"
-    with io.FileIO(encoded_file, "w") as file:
-        file.write(encoded_stream)
-        # textStr = ""
-# print(newstream)
-# print(encoded_stream)
-
-# print(tran_char)
+        encoded_file = str(filepath) + ".enc"
+        with io.FileIO(encoded_file, "w") as file:
+            file.write(encoded_stream)
 #DECODING
-# rev_start_state = initial_start_state
-# decoded_stream = ""
-# for i in encoded_stream:
-#     rev_next_state = tran_char[rev_start_state].index(i)
-#     decoded_stream += binary_tran_mat[rev_start_state][rev_next_state][2:]
-#     rev_start_state = rev_next_state
-#
-# print(decoded_stream)
+    rev_start_state = initial_start_state
+    if (fil.endswith('.enc')) and os.path.exists(pat + fil):
+        filepath = os.path.join(pat, fil)
+        print(filepath)
+        with open(os.path.abspath(filepath), "rb") as f:
+            decoded_stream = ""
+            for i in encoded_stream:
+                rev_next_state = emission_graph[rev_start_state].index(i)
+                decoded_stream += binary_tran_mat[rev_start_state][rev_next_state][2:]
+                rev_start_state = rev_next_state
+            print(decoded_stream == newstream)
 
-# print(decoded_stream == newstream)
+            # strt = 0
+            # actual_string = ""
+            # write_stream = ""
+            # write_stream += (int(decoded_stream, 2)).decode('utf-8')
+            # while (strt+8) != len(decoded_stream):
+            #     strm = decoded_stream[strt:strt + 8]
+            #     strm = (strm.lstrip("0"))
+            #     strt += 8
+            #     write_stream = chr(strm)
+                # write_stream += (struct.pack('B', int(strm)))
+                # write_stream += ('%x' % int(strm, 2)).decode('hex').decode('utf-8')
 
-
-# strt = 0
-# actual_string = ""
-# write_stream = ""
-#
-# for i in decoded_stream:
-#     strm = decoded_stream[strt:strt + 8]
-#     strm = strm[::-1]
-#     actual_string += strm
-#     # print(strm)
-#     strm = (strm.lstrip("0"))
-#     # write_stream += (struct.pack('B', int(strm)))
-#     strt += 8
-#     if strm == " " or strm == '':
-#         strm = '0'
-#     write_stream += ('%x' % int(strm, 2)).decode('hex').decode('utf-8')
-#
-#     # write_stream =(''.join([chr(int(x, 2)) for x in re.split('(........)',actual_string) if x])).decode('utf-8')
-# with open('outfile', 'wb') as f:
-#     f.write(write_stream)
+                # write_stream =(''.join([chr(int(x, 2)) for x in re.split('(........)',actual_string) if x])).decode('utf-8')
+            # decoded_file = str(filepath) + ".dec"
+            # with io.FileIO(decoded_file, "w") as file:
+            #     file.write(write_stream)
 
 
 # if decoded_stream == newstream:
