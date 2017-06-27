@@ -2,7 +2,52 @@ import math, pickle, struct, io, binascii,re, os,random, hashlib
 import numpy as np
 from Crypto.Cipher import AES
 from practice import TOE_HMM_CHARS
-model = TOE_HMM_CHARS.loadHMM('brown_chars_N6.hmm')
+# model = TOE_HMM_CHARS.loadHMM('brown_chars_N2710k.hmm')
+# model = TOE_HMM_CHARS.loadHMM('brown_chars_N2750k.hmm')
+# model = TOE_HMM_CHARS.loadHMM('brown_chars_N271l.hmm')
+model = TOE_HMM_CHARS.loadHMM('brown_chars_N272l.hmm')
+
+# pat = 'letter/10k/'
+# pat = 'letter/50k/'
+# pat = 'letter/1l/'
+pat = 'letter/2l/'
+
+def encrypt_file(key, in_filename, out_filename=None, chunksize=64 * 1024):
+
+    if not out_filename:
+        out_filename = in_filename + '.encr'
+
+    iv = ''.join(chr(random.randint(0, 0xFF)) for i in range(16))
+    encryptor = AES.new(key, AES.MODE_CBC, iv)
+    filesize = os.path.getsize(in_filename)
+
+    with open(in_filename, 'rb') as infile:
+        with open(out_filename, 'wb') as outfile:
+            outfile.write(struct.pack('<Q', filesize))
+            outfile.write(iv)
+
+            while True:
+                chunk = infile.read(chunksize)
+                if len(chunk) == 0:
+                    break
+                elif len(chunk) % 16 != 0:
+                    chunk += ' ' * (16 - len(chunk) % 16)
+
+                outfile.write(encryptor.encrypt(chunk))
+
+
+password = 'Rachel'
+keyin = hashlib.sha256(password).digest()
+
+# pat = '/home/rachel1105g/nltk_data/corpora/brown/'
+
+
+for fil in os.listdir(pat):
+    print(fil)
+    if (os.path.exists(pat+fil)):
+        encrypt_file(keyin, pat + fil)
+
+
 
 lis = [1/math.pow(2,i) for i in range(20)]
 
@@ -51,19 +96,21 @@ def binarization(A):
         descSortedRow = sorted(enumerate(row), key=lambda x: x[1], reverse=True)
         IRP.append([i[0] for i in descSortedRow]) # Key is the value, Lambda function chooses the value from each tuple for sorting
         ORP.append([i[1] for i in descSortedRow]) #http://stackoverflow.com/questions/6422700/how-to-get-indices-of-a-sorted-array-in-python/6423325#6423325
-    print(IRP)
-    print(ORP)
+        # print(ORP)
+    # print(IRP)
+
 
     for row_ORP in ORP:
         row_BIN_ORP = []
         row_BIN_ORP.append(0)
+        row_BIN_ORP.append(1)
 
-        last_input = row_ORP[0]
-        last_output = row_BIN_ORP[0]
-        num = int(math.log(int(div(1,row_ORP[0])),2))
+        last_input = row_ORP[1]
+        last_output = row_BIN_ORP[1]
+        num = int(math.log(int(div(1,row_ORP[1])),2))
         k = len(row_ORP)
 
-        j = 1
+        j = 2
         while j<k:
             if row_ORP[j] == 0:
                 row_BIN_ORP.append('-')
@@ -78,8 +125,10 @@ def binarization(A):
             last_input = row_ORP[j]
             last_output = (last_output + 1) * (math.pow(2,diff))
             j += 1
-
+        # print(row_BIN_ORP)
         BIN_ORP.append(row_BIN_ORP)
+        # print(row_ORP)
+        # print(row_BIN_ORP)
 
 
     for row in IRP:
@@ -90,41 +139,42 @@ def binarization(A):
 
 l = str(27)
 
-with open('outA'+l+'.txt', 'rb') as fp:
-    tran_mat = pickle.load(fp)
-    tran_mat = rounding(tran_mat)
-    print('{}{}'.format("Transition matrix A: ", tran_mat))
-    binary_tran_mat =  binarization(tran_mat)
-    print('{}'.format("Binary Transition matrix A: "))
-    for row in binary_tran_mat:
-        print(row)
+# A matrix
+# (self._hmm.transmat_, self._hmm.emissionprob_, self._hmm.startprob_)
+tran_mat = model._hmm.transmat_
+tran_mat = rounding(tran_mat)
+print('{}{}'.format("Transition matrix A: ", tran_mat))
+binary_tran_mat =  binarization(tran_mat)
+print('{}'.format("Binary Transition matrix A: "))
+for row in binary_tran_mat:
+    print(row)
 
 
-with open('outB'+l+'.txt', 'rb') as fp:
-    B = pickle.load(fp)
-    B_argmax = [max(row) for row in B]
-    B_letter = [np.where(row == max(row)) for row in B]
-    letter = []
-    print(B_letter)
-    print(B_argmax)
-    for i in B_letter:
-        if i[0][0] == 26:
-            letter.append(' ')
-        else:
-            letter.append(chr(i[0][0]+97))
-    descSortedB = []
-    for row in B:
-        descSortedB_row = sorted(enumerate(row), key=lambda x: x[1], reverse=True)
-        descSortedB.append(descSortedB_row)
-    print(descSortedB)
+# B matrix
+B = model._hmm.emissionprob_
+B_argmax = [max(row) for row in B]
+B_letter = [np.where(row == max(row)) for row in B]
+letter = []
+print(B_letter)
+print(B_argmax)
+for i in B_letter:
+    if i[0][0] == 26:
+        letter.append(' ')
+    else:
+        letter.append(chr(i[0][0]+97))
+descSortedB = []
+for row in B:
+    descSortedB_row = sorted(enumerate(row), key=lambda x: x[1], reverse=True)
+    descSortedB.append(descSortedB_row)
+print(descSortedB)
 
 
-with open('outPI'+l+'.txt', 'rb') as fp:
-    pi = pickle.load(fp)
-    pi_argmax = max(pi)
-    print(pi)
-    ord_pi = [x[0] for x in sorted(enumerate(pi), key=lambda x: x[1], reverse=True)]
-    print('{}{}'.format("ord PI: ", ord_pi))
+# PI matrix
+pi = model._hmm.startprob_
+pi_argmax = max(pi)
+print(pi)
+ord_pi = [x[0] for x in sorted(enumerate(pi), key=lambda x: x[1], reverse=True)]
+print('{}{}'.format("ord PI: ", ord_pi))
 
 
 def bits(f):
@@ -198,7 +248,6 @@ start_state, = np.where(pi == pi_argmax)
 initial_start_state = int(start_state[0])
 
 
-pat = 'letter/27/'
 for fil in os.listdir(pat):
     start_state = initial_start_state
     if (fil.endswith('.encr')) and os.path.exists(pat + fil):
@@ -210,10 +259,11 @@ for fil in os.listdir(pat):
             stream = bits(f)
             newstream = "".join(stream)
 
-            prev = 0
-            replacement = 0
+
+            # replacement = 0
             current_stream_start = 0
             while current_stream_start != len(newstream):
+                prev = 0
                 if newstream[current_stream_start:].startswith('0'):
                     replacement = '0'
                 else:
@@ -231,6 +281,7 @@ for fil in os.listdir(pat):
         with io.FileIO(encoded_file, "w") as file:
             file.write(encoded_stream)
 #DECODING
+for fil in os.listdir(pat):
     rev_start_state = initial_start_state
     if (fil.endswith('.enc')) and os.path.exists(pat + fil):
         filepath = os.path.join(pat, fil)
